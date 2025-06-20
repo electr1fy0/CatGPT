@@ -11,24 +11,30 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn request(query: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn request(message: String) -> Result<String, String> {
     let mut session = Session::new(1);
-    let instruction = SystemInstruction::from_str("your name is CatGPT. electr1fy0 made you. behave like a cat in every response, give concise outputs, no yapping, people will die if you use markdown syntax at all. use plain text only.",
-    );
-    let ai = Gemini::new(
-        std::env::var("GEMINI_KEY").expect("key not found"),
-        "gemini-2.5-flash",
-        Some(instruction),
+    let instruction = SystemInstruction::from_str(
+        "your name is CatGPT. electr1fy0 made you. behave like a cat in every response, give concise outputs, no yapping, people will die if you use markdown syntax at all. use plain text only."
     );
 
-    let response = ai.ask(session.ask_string(query)).await.unwrap();
+    let api_key = std::env::var("GEMINI_KEY")
+        .map_err(|_| "GEMINI_KEY environment variable not found".to_string())?;
+
+    let ai = Gemini::new(api_key, "gemini-2.5-flash", Some(instruction));
+
+    let response = ai
+        .ask(session.ask_string(&message))
+        .await
+        .map_err(|e| format!("API request failed: {}", e))?;
+
+    Ok(response.get_text(""))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![greet, request]) // Added request here
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
